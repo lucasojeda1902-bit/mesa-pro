@@ -1,0 +1,82 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - name: Bajar el código
+        uses: actions/checkout@v4.2.2
+
+      - name: Descomprimir la app
+        run: unzip -o .github/workflows/mesa-pro.zip -x '.github/*'
+
+      - name: Node 20
+        uses: actions/setup-node@v4.1.0
+        with:
+          node-version: 20
+
+      - name: Java 17
+        uses: actions/setup-java@v4.5.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3.2.2
+
+      - name: Instalar dependencias
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      - name: Crear el proyecto Android (solo la primera vez)
+        run: |
+          if [ ! -d android ]; then npx cap add android; fi
+
+      - name: Poner ícono, pantalla de bienvenida y colores de las barras
+        run: |
+          RES=android/app/src/main/res
+          cp -r resources/android/mipmap-* "$RES"/
+          cp resources/android/values/*.xml "$RES"/values/
+          find "$RES" -name splash.png -path "*land*" -exec cp resources/android/splash-land.png {} \;
+          find "$RES" -name splash.png -not -path "*land*" -exec cp resources/android/splash-port.png {} \;
+
+      - name: Sincronizar la app web con Android
+        run: npx cap sync android
+
+      - name: Compilar APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Guardar APK como artefacto
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: mesa-pro-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Mover la etiqueta latest a este commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git tag -f latest
+          git push -f origin latest
+
+      - name: Publicar en Releases (latest)
+        uses: softprops/action-gh-release@v2.0.9
+        with:
+          tag_name: latest
+          name: Mesa PRO (última versión)
+          body: "APK de prueba (debug). Bajá app-debug.apk e instalalo."
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
