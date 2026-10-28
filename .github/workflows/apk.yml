@@ -31,7 +31,7 @@ jobs:
           java-version: 17
 
       - name: Android SDK
-        uses: android-actions/setup-android@v3.2.2
+        run: echo "SDK preinstalado en el runner"
 
       - name: Instalar dependencias
         run: |
