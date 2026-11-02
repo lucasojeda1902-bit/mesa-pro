@@ -19,6 +19,10 @@ jobs:
       - name: Descomprimir la app
         run: unzip -o .github/workflows/mesa-pro.zip -x '.github/*'
 
+      - name: Aplicar la carpeta src (versión 2 encima del zip)
+        run: |
+          if [ -d src ]; then cp -r src/. . ; fi
+
       - name: Node 20
         uses: actions/setup-node@v4.1.0
         with:
@@ -34,12 +38,17 @@ jobs:
         run: echo "SDK preinstalado en el runner"
 
       - name: Instalar dependencias
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+        run: npm install --no-audit --no-fund
 
       - name: Crear el proyecto Android (solo la primera vez)
         run: |
           if [ ! -d android ]; then npx cap add android; fi
+
+      - name: Ajustes de Android (permisos, avisos en segundo plano, versión 2.0)
+        run: |
+          if [ -f resources/patch-android.js ]; then
+            MESA_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER)) node resources/patch-android.js
+          fi
 
       - name: Poner ícono, pantalla de bienvenida y colores de las barras
         run: |
@@ -49,8 +58,24 @@ jobs:
           find "$RES" -name splash.png -path "*land*" -exec cp resources/android/splash-land.png {} \;
           find "$RES" -name splash.png -not -path "*land*" -exec cp resources/android/splash-port.png {} \;
 
+      - name: Armar el chequeo en segundo plano (runners/check.js)
+        run: |
+          if [ -f resources/build-runner.js ]; then node resources/build-runner.js; fi
+
       - name: Sincronizar la app web con Android
         run: npx cap sync android
+
+      - name: Firma fija de depuración (si existe el secreto DEBUG_KEYSTORE_B64)
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_B64" ]; then
+            mkdir -p ~/.android
+            echo "$DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+            echo "Firma fija instalada"
+          else
+            echo "Sin secreto: se usa una firma nueva en cada armado"
+          fi
 
       - name: Compilar APK
         working-directory: android
