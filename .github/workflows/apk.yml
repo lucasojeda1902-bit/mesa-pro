@@ -73,6 +73,8 @@ jobs:
             mkdir -p ~/.android
             echo "$DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
             echo "Firma fija instalada"
+            cp ~/.android/debug.keystore android/app/fija.keystore
+            printf "\nandroid { signingConfigs { debug { storeFile file('fija.keystore'); storePassword 'android'; keyAlias 'androiddebugkey'; keyPassword 'android' } } }\n" >> android/app/build.gradle
           else
             echo "Sin secreto: se usa una firma nueva en cada armado"
           fi
